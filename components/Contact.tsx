@@ -206,7 +206,7 @@ export default function Contact() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-lg text-muted-foreground max-w-2xl mx-auto"
           >
-            Ready to transform your fitness journey? Contact us today and let's get started!
+            Ready to transform your fitness journey? Contact us today and let&apos;s get started!
           </motion.p>
         </div>
 

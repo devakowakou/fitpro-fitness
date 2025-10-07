@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { Ratelimit } from '@upstash/ratelimit';
-import { kv } from '@vercel/kv';
-import DOMPurify from 'isomorphic-dompurify';
 
-// Rate limiting setup (disabled for development - requires Redis in production)
-const ratelimit = process.env.NODE_ENV === 'production' ? new Ratelimit({
-  redis: kv,
-  limiter: Ratelimit.slidingWindow(5, '1 h'), // 5 requests per hour
-  analytics: true,
-}) : null;
+// Simplified rate limiting for development (no external dependencies)
+const ratelimit = new Map<string, { count: number; resetTime: number }>();
 
 // Input validation schema
 const contactSchema = z.object({
@@ -55,38 +48,49 @@ function getClientIP(request: NextRequest): string {
   return 'unknown';
 }
 
-// CSRF Token generation (in production, use a more secure method)
-function generateCSRFToken(): string {
-  return Math.random().toString(36).substring(2, 15) +
-         Math.random().toString(36).substring(2, 15);
+// Simple rate limiting for development
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const windowMs = 60 * 1000; // 1 minute window
+  const maxRequests = 5; // 5 requests per minute
+
+  const userLimit = ratelimit.get(ip);
+
+  if (!userLimit || now > userLimit.resetTime) {
+    ratelimit.set(ip, { count: 1, resetTime: now + windowMs });
+    return true;
+  }
+
+  if (userLimit.count >= maxRequests) {
+    return false;
+  }
+
+  userLimit.count++;
+  return true;
+}
+
+// Basic input sanitization (no external dependencies)
+function sanitizeInput(input: string): string {
+  return input
+    .trim()
+    .replace(/[<>]/g, '') // Remove potential HTML tags
+    .slice(0, 1000); // Limit length
 }
 
 export async function POST(request: NextRequest) {
   try {
     const ip = getClientIP(request);
 
-    // Rate limiting check (only in production)
-    if (ratelimit) {
-      const { success: rateLimitSuccess } = await ratelimit.limit(ip);
-      if (!rateLimitSuccess) {
-        return NextResponse.json(
-          { error: 'Too many requests. Please try again later.' },
-          { status: 429 }
-        );
-      }
+    // Simple rate limiting check
+    if (!checkRateLimit(ip)) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      );
     }
 
     // Parse and validate form data
     const formData = await request.json();
-
-    // CSRF token validation (basic implementation)
-    const csrfToken = request.headers.get('x-csrf-token');
-    if (!csrfToken || csrfToken !== formData.csrfToken) {
-      return NextResponse.json(
-        { error: 'Invalid CSRF token' },
-        { status: 403 }
-      );
-    }
 
     // Validate input data
     const validationResult = contactSchema.safeParse(formData);
@@ -105,16 +109,7 @@ export async function POST(request: NextRequest) {
 
     const { firstName, lastName, email, phone, message, website } = validationResult.data;
 
-    // Sanitize inputs
-    const sanitizedData = {
-      firstName: DOMPurify.sanitize(firstName.trim()),
-      lastName: DOMPurify.sanitize(lastName.trim()),
-      email: DOMPurify.sanitize(email.trim().toLowerCase()),
-      phone: DOMPurify.sanitize(phone.trim()),
-      message: DOMPurify.sanitize(message.trim()),
-    };
-
-    // Additional security checks
+    // Basic security checks
     if (website && website.length > 0) {
       return NextResponse.json(
         { error: 'Spam detected' },
@@ -127,13 +122,11 @@ export async function POST(request: NextRequest) {
       /<script/i,
       /javascript:/i,
       /vbscript:/i,
-      /onload=/i,
-      /onerror=/i,
-      /onclick=/i,
     ];
 
+    const combinedInput = `${firstName} ${lastName} ${message}`.toLowerCase();
     for (const pattern of suspiciousPatterns) {
-      if (pattern.test(message) || pattern.test(firstName) || pattern.test(lastName)) {
+      if (pattern.test(combinedInput)) {
         return NextResponse.json(
           { error: 'Invalid content detected' },
           { status: 400 }
@@ -141,12 +134,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // In a real application, you would:
-    // 1. Send email using a service like SendGrid, AWS SES, or similar
-    // 2. Store the contact in a database
-    // 3. Send confirmation email to user
+    // Basic sanitization
+    const sanitizedData = {
+      firstName: sanitizeInput(firstName),
+      lastName: sanitizeInput(lastName),
+      email: sanitizeInput(email.toLowerCase()),
+      phone: sanitizeInput(phone),
+      message: sanitizeInput(message),
+    };
 
-    // For now, we'll just log the sanitized data
+    // Log the submission (in production, you'd save to database/send email)
     console.log('Contact form submission:', {
       ...sanitizedData,
       ip,
@@ -171,9 +168,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET endpoint to provide CSRF token
+// GET endpoint for CSRF token (simplified)
 export async function GET() {
-  const csrfToken = generateCSRFToken();
+  const csrfToken = Math.random().toString(36).substring(2, 15) +
+                   Math.random().toString(36).substring(2, 15);
 
   return NextResponse.json({
     csrfToken,
