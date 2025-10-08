@@ -13,7 +13,7 @@ interface FormData {
   email: string;
   phone: string;
   message: string;
-  website: string; // Honeypot field
+  website: string; 
 }
 
 interface FormErrors {
@@ -40,7 +40,6 @@ export default function Contact() {
   const [csrfToken, setCsrfToken] = useState('');
   const [submitMessage, setSubmitMessage] = useState('');
 
-  // Fetch CSRF token on component mount
   useEffect(() => {
     const fetchCsrfToken = async () => {
       try {
@@ -55,11 +54,9 @@ export default function Contact() {
     fetchCsrfToken();
   }, []);
 
-  // Client-side validation
   const validateForm = (): FormErrors => {
     const newErrors: FormErrors = {};
 
-    // First name validation
     if (!formData.firstName.trim()) {
       newErrors.firstName = 'First name is required';
     } else if (formData.firstName.length < 2) {
@@ -70,7 +67,6 @@ export default function Contact() {
       newErrors.firstName = 'First name contains invalid characters';
     }
 
-    // Last name validation
     if (!formData.lastName.trim()) {
       newErrors.lastName = 'Last name is required';
     } else if (formData.lastName.length < 2) {
@@ -81,7 +77,6 @@ export default function Contact() {
       newErrors.lastName = 'Last name contains invalid characters';
     }
 
-    // Email validation
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
@@ -90,7 +85,6 @@ export default function Contact() {
       newErrors.email = 'Email must be less than 100 characters';
     }
 
-    // Phone validation
     if (!formData.phone.trim()) {
       newErrors.phone = 'Phone number is required';
     } else if (formData.phone.replace(/\D/g, '').length < 10) {
@@ -99,7 +93,6 @@ export default function Contact() {
       newErrors.phone = 'Phone number must be less than 15 characters';
     }
 
-    // Message validation
     if (!formData.message.trim()) {
       newErrors.message = 'Message is required';
     } else if (formData.message.length < 10) {
@@ -108,7 +101,6 @@ export default function Contact() {
       newErrors.message = 'Message must be less than 1000 characters';
     }
 
-    // Honeypot check
     if (formData.website) {
       newErrors.general = 'Spam detected';
     }
@@ -120,7 +112,6 @@ export default function Contact() {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
 
-    // Clear field error when user starts typing
     if (errors[name as keyof FormErrors]) {
       setErrors(prev => ({ ...prev, [name]: undefined }));
     }
@@ -129,7 +120,6 @@ export default function Contact() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate form
     const validationErrors = validateForm();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
@@ -157,7 +147,6 @@ export default function Contact() {
 
       if (!response.ok) {
         if (data.details) {
-          // Handle validation errors from server
           const serverErrors: FormErrors = {};
           data.details.forEach((error: { field: string; message: string }) => {
             serverErrors[error.field as keyof FormErrors] = error.message;
@@ -169,7 +158,6 @@ export default function Contact() {
         return;
       }
 
-      // Success
       setSubmitMessage(data.message);
       setFormData({
         firstName: '',
